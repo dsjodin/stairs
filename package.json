@@ -1,0 +1,15 @@
+{
+  "name": "stairs-monorepo",
+  "private": true,
+  "workspaces": ["packages/*", "apps/*"],
+  "scripts": {
+    "dev": "concurrently \"pnpm --filter api dev\" \"pnpm --filter web dev\"",
+    "build": "pnpm --filter calc build && pnpm --filter api build && pnpm --filter web build",
+    "test": "pnpm --filter calc test && pnpm --filter api test && pnpm --filter web test",
+    "test:e2e": "pnpm --filter web test:e2e"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0",
+    "typescript": "^5.4.0"
+  }
+}
