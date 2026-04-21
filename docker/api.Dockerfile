@@ -25,8 +25,9 @@ COPY --from=builder /app/apps/api/node_modules ./apps/api/node_modules
 # Copy package manifests needed for module resolution
 COPY --from=builder /app/package.json ./
 COPY --from=builder /app/apps/api/package.json ./apps/api/
-# Copy calc with its dist so the workspace link resolves
+# Copy calc with its dist and node_modules so zod resolves from packages/calc/dist/types.js
 COPY --from=builder /app/packages/calc/package.json ./packages/calc/
+COPY --from=builder /app/packages/calc/node_modules ./packages/calc/node_modules
 COPY --from=builder /app/packages/calc/dist ./packages/calc/dist
 # Copy API compiled output
 COPY --from=builder /app/apps/api/dist ./apps/api/dist
