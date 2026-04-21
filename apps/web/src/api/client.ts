@@ -7,8 +7,15 @@ export async function calculateStairs(input: StairInput): Promise<StairResult> {
     body: JSON.stringify(input),
   });
   if (!res.ok) {
-    const err = await res.json();
-    throw new Error(JSON.stringify(err));
+    const text = await res.text();
+    let message: string;
+    try {
+      const err = JSON.parse(text) as { errors?: unknown };
+      message = JSON.stringify(err.errors ?? err);
+    } catch {
+      message = `HTTP ${res.status} ${res.statusText}`;
+    }
+    throw new Error(message);
   }
   return res.json() as Promise<StairResult>;
 }
