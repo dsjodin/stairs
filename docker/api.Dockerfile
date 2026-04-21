@@ -13,18 +13,17 @@ COPY packages/calc ./packages/calc
 COPY apps/api ./apps/api
 RUN pnpm --filter calc build && pnpm --filter api build
 
+# pnpm deploy resolves all prod deps into a self-contained directory
+# with no symlinks, so the runtime image works without the pnpm store
+RUN pnpm --filter @stairs/api deploy --prod /deploy/api
+
 FROM node:20-alpine AS runtime
 WORKDIR /app
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./
-COPY --from=builder /app/packages/calc/dist ./packages/calc/dist
-COPY --from=builder /app/packages/calc/package.json ./packages/calc/
-COPY --from=builder /app/apps/api/dist ./apps/api/dist
-COPY --from=builder /app/apps/api/package.json ./apps/api/
+COPY --from=builder /deploy/api ./
 
 USER appuser
 ENV NODE_ENV=production
 EXPOSE 3001
-CMD ["node", "apps/api/dist/index.js"]
+CMD ["node", "dist/index.js"]
