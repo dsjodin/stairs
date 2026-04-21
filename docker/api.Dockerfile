@@ -32,5 +32,7 @@ COPY --from=builder /app/apps/api/dist ./apps/api/dist
 
 USER appuser
 ENV NODE_ENV=production
+ENV API_PORT=3001
+ENV API_HOST=0.0.0.0
 EXPOSE 3001
 CMD ["node", "apps/api/dist/index.js"]
