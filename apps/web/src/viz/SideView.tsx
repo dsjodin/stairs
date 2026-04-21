@@ -1,5 +1,5 @@
 import React from "react";
-import type { StairResult, StairStyle, FlightSegment, LandingSegment } from "@stairs/calc";
+import type { StairResult, StairStyle, FlightSegment, LandingSegment, WinderSegment } from "@stairs/calc";
 import { DimensionLine } from "./DimensionLine.tsx";
 
 interface Props {
@@ -12,11 +12,24 @@ const W = 700;
 const H = 450;
 
 export function SideView({ result, style }: Props) {
-  const { segments, actualStepHeight, actualStepDepth, totalRun, slopeDegrees } = result;
+  const {
+    segments,
+    actualStepHeight,
+    actualStepDepth,
+    totalRun,
+    slopeDegrees,
+    stairwellStart,
+    stairwellLength,
+    floorThickness,
+    minimumHeadroom,
+  } = result;
   const totalRise = result.numberOfSteps * actualStepHeight;
 
-  const scaleX = (W - MARGIN * 2) / (totalRun + actualStepDepth * 2);
-  const scaleY = (H - MARGIN * 2) / (totalRise + actualStepHeight * 2);
+  const extraX = stairwellStart !== undefined ? actualStepDepth * 2 : actualStepDepth * 2;
+  const extraY = stairwellStart !== undefined ? floorThickness + actualStepHeight * 2 : actualStepHeight * 2;
+
+  const scaleX = (W - MARGIN * 2) / (totalRun + extraX);
+  const scaleY = (H - MARGIN * 2) / (totalRise + extraY);
   const scale = Math.min(scaleX, scaleY);
 
   function sx(mm: number) {
@@ -28,6 +41,8 @@ export function SideView({ result, style }: Props) {
 
   const paths: React.ReactNode[] = [];
   let stepIndex = 0;
+  let cx = 0;
+  let cy = 0;
 
   for (const seg of segments) {
     if (seg.kind === "landing") {
@@ -44,12 +59,45 @@ export function SideView({ result, style }: Props) {
           strokeWidth={1.5}
         />
       );
+      cx = ls.x + ls.width;
+      cy = ls.y + ls.depth;
+      continue;
+    }
+
+    if (seg.kind === "winder") {
+      const ws = seg as WinderSegment;
+      const tread = ws.walkingLineDepth;
+      for (let i = 0; i < ws.steps; i++) {
+        stepIndex++;
+        const riser = ws.stepHeight;
+        const isLast = i === ws.steps - 1;
+        if (style === "closed") {
+          const p = isLast
+            ? `M${sx(cx)},${sy(cy)} L${sx(cx)},${sy(cy + riser)}`
+            : `M${sx(cx)},${sy(cy)} L${sx(cx)},${sy(cy + riser)} L${sx(cx + tread)},${sy(cy + riser)}`;
+          paths.push(
+            <path key={`winder-side-${i}`} d={p} fill="none" stroke="#d97706" strokeWidth={1.5} />
+          );
+        } else if (!isLast) {
+          paths.push(
+            <path
+              key={`winder-side-${i}`}
+              d={`M${sx(cx)},${sy(cy + riser)} L${sx(cx + tread)},${sy(cy + riser)}`}
+              fill="none"
+              stroke="#d97706"
+              strokeWidth={2}
+            />
+          );
+        }
+        if (!isLast) cx += tread;
+        cy += riser;
+      }
       continue;
     }
 
     const fs = seg as FlightSegment;
-    let cx = fs.startX;
-    let cy = fs.startY;
+    if (fs.direction === "right") cx = fs.startX;
+    cy = fs.startY;
 
     for (let i = 0; i < fs.steps; i++) {
       stepIndex++;
@@ -58,14 +106,12 @@ export function SideView({ result, style }: Props) {
       const isLast = i === fs.steps - 1;
 
       if (fs.direction === "right") {
-        // Always draw riser; only draw tread if not last step
         if (style === "closed") {
           const p = isLast
             ? `M${sx(cx)},${sy(cy)} L${sx(cx)},${sy(cy + riser)}`
             : `M${sx(cx)},${sy(cy)} L${sx(cx)},${sy(cy + riser)} L${sx(cx + tread)},${sy(cy + riser)}`;
           paths.push(<path key={`step-${stepIndex}`} d={p} fill="none" stroke="#374151" strokeWidth={1.5} />);
         } else if (!isLast) {
-          // Open style: tread line only
           paths.push(
             <path
               key={`step-${stepIndex}`}
@@ -79,7 +125,6 @@ export function SideView({ result, style }: Props) {
         if (!isLast) cx += tread;
         cy += riser;
       } else if (fs.direction === "up") {
-        // Second flight in L-shape (profile view: going "up" means stepping in Y direction)
         if (style === "closed") {
           const p = isLast
             ? `M${sx(cx)},${sy(cy)} L${sx(cx + riser)},${sy(cy)}`
@@ -102,7 +147,6 @@ export function SideView({ result, style }: Props) {
     }
   }
 
-  // Stringer (diagonal underside line) for straight stair
   const straightFlights = segments.filter((s) => s.kind === "flight") as FlightSegment[];
   const firstFlight = straightFlights[0];
   const lastFlight = straightFlights[straightFlights.length - 1];
@@ -110,7 +154,83 @@ export function SideView({ result, style }: Props) {
     lastFlight.direction === "right"
       ? lastFlight.startX + (lastFlight.steps - 1) * lastFlight.stepDepth
       : lastFlight.startX;
-  const stringerEndY = totalRise;
+
+  // Stairwell elements
+  const stairwellElements: React.ReactNode[] = [];
+  if (stairwellStart !== undefined && stairwellLength !== undefined) {
+    const ceilingH = totalRise - floorThickness;
+    const nosingAtStart = stairwellStart * (totalRise / totalRun);
+
+    // Dashed ceiling line (underside of upper floor)
+    stairwellElements.push(
+      <line
+        key="sw-ceiling"
+        x1={sx(stairwellStart)}
+        y1={sy(ceilingH)}
+        x2={sx(totalRun)}
+        y2={sy(ceilingH)}
+        stroke="#6b7280"
+        strokeWidth={1.5}
+        strokeDasharray="6,3"
+      />
+    );
+
+    // Vertical edge of stairwell opening
+    stairwellElements.push(
+      <line
+        key="sw-edge"
+        x1={sx(stairwellStart)}
+        y1={sy(nosingAtStart)}
+        x2={sx(stairwellStart)}
+        y2={sy(ceilingH)}
+        stroke="#9ca3af"
+        strokeWidth={1}
+        strokeDasharray="4,2"
+      />
+    );
+
+    // Upper floor slab (solid section to the right of stair top)
+    stairwellElements.push(
+      <rect
+        key="sw-slab"
+        x={sx(totalRun)}
+        y={sy(totalRise)}
+        width={40}
+        height={floorThickness * scale}
+        fill="#d1d5db"
+        stroke="#374151"
+        strokeWidth={1}
+      />
+    );
+
+    // Headroom dimension at stairwellStart
+    stairwellElements.push(
+      <DimensionLine
+        key="sw-headroom"
+        x1={sx(stairwellStart) + 30}
+        y1={sy(nosingAtStart)}
+        x2={sx(stairwellStart) + 30}
+        y2={sy(ceilingH)}
+        label={`${Math.round(minimumHeadroom)} mm`}
+        offset={20}
+        color="#f59e0b"
+      />
+    );
+
+    // Stairwell length dimension
+    stairwellElements.push(
+      <DimensionLine
+        key="sw-length"
+        x1={sx(stairwellStart)}
+        y1={sy(0) + 50}
+        x2={sx(totalRun)}
+        y2={sy(0) + 50}
+        label={`Trapphål ${Math.round(stairwellLength)} mm`}
+        offset={18}
+        color="#6b7280"
+      />
+    );
+  }
 
   return (
     <svg
@@ -128,7 +248,7 @@ export function SideView({ result, style }: Props) {
       <line
         x1={sx(0) - 10}
         y1={sy(0)}
-        x2={sx(totalRun) + 10}
+        x2={sx(totalRun) + 50}
         y2={sy(0)}
         stroke="#9ca3af"
         strokeWidth={1}
@@ -140,7 +260,7 @@ export function SideView({ result, style }: Props) {
         x1={sx(firstFlight.startX)}
         y1={sy(firstFlight.startY)}
         x2={sx(stringerEndX)}
-        y2={sy(stringerEndY)}
+        y2={sy(totalRise)}
         stroke="#6b7280"
         strokeWidth={1}
         strokeDasharray="5,3"
@@ -148,6 +268,7 @@ export function SideView({ result, style }: Props) {
       />
 
       {paths}
+      {stairwellElements}
 
       {/* Dimension lines */}
       <DimensionLine
@@ -185,14 +306,8 @@ export function SideView({ result, style }: Props) {
         color="#f59e0b"
       />
 
-      {/* Angle arc */}
-      <text
-        x={sx(0) + 30}
-        y={sy(0) - 10}
-        fontSize={10}
-        fill="#6b7280"
-        fontFamily="monospace"
-      >
+      {/* Angle */}
+      <text x={sx(0) + 30} y={sy(0) - 10} fontSize={10} fill="#6b7280" fontFamily="monospace">
         {slopeDegrees.toFixed(1)}°
       </text>
     </svg>

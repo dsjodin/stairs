@@ -1,5 +1,5 @@
 import React from "react";
-import type { StairResult, FlightSegment, LandingSegment } from "@stairs/calc";
+import type { StairResult, FlightSegment, LandingSegment, WinderSegment } from "@stairs/calc";
 import { DimensionLine } from "./DimensionLine.tsx";
 
 interface Props {
@@ -62,12 +62,74 @@ export function PlanView({ result }: Props) {
       continue;
     }
 
+    if (seg.kind === "winder") {
+      const ws = seg as WinderSegment;
+      const pivX = px(ws.pivotX);
+      const pivY = py(ws.pivotY);
+      const outerR_px = ws.outerRadius * scale;
+      const walkR_px = (2 / 3) * ws.outerRadius * scale;
+
+      for (let i = 0; i < ws.steps; i++) {
+        stepNum++;
+        const a1 = ((ws.startAngleDeg + (i * ws.totalAngleDeg) / ws.steps) * Math.PI) / 180;
+        const a2 = ((ws.startAngleDeg + ((i + 1) * ws.totalAngleDeg) / ws.steps) * Math.PI) / 180;
+        const x1 = pivX + outerR_px * Math.cos(a1);
+        const y1 = pivY + outerR_px * Math.sin(a1);
+        const x2 = pivX + outerR_px * Math.cos(a2);
+        const y2 = pivY + outerR_px * Math.sin(a2);
+        const d = `M ${pivX},${pivY} L ${x1},${y1} A ${outerR_px},${outerR_px} 0 0 1 ${x2},${y2} Z`;
+        elements.push(
+          <path
+            key={`winder-step-${i}`}
+            d={d}
+            fill={i % 2 === 0 ? "#fef3c7" : "#fde68a"}
+            stroke="#374151"
+            strokeWidth={1.5}
+          />
+        );
+        const midA = (a1 + a2) / 2;
+        const labelR = outerR_px * 0.6;
+        elements.push(
+          <text
+            key={`winder-num-${i}`}
+            x={pivX + labelR * Math.cos(midA)}
+            y={pivY + labelR * Math.sin(midA)}
+            textAnchor="middle"
+            dominantBaseline="middle"
+            fontSize={9}
+            fill="#6b7280"
+            fontFamily="monospace"
+          >
+            {stepNum}
+          </text>
+        );
+      }
+
+      // Walking line arc (dashed blue, at 2/3 of stairWidth from pivot)
+      const wa1 = (ws.startAngleDeg * Math.PI) / 180;
+      const wa2 = ((ws.startAngleDeg + ws.totalAngleDeg) * Math.PI) / 180;
+      const wx1 = pivX + walkR_px * Math.cos(wa1);
+      const wy1 = pivY + walkR_px * Math.sin(wa1);
+      const wx2 = pivX + walkR_px * Math.cos(wa2);
+      const wy2 = pivY + walkR_px * Math.sin(wa2);
+      elements.push(
+        <path
+          key="walking-line"
+          d={`M ${wx1},${wy1} A ${walkR_px},${walkR_px} 0 0 1 ${wx2},${wy2}`}
+          fill="none"
+          stroke="#3b82f6"
+          strokeWidth={1.5}
+          strokeDasharray="4,2"
+        />
+      );
+      continue;
+    }
+
     const fs = seg as FlightSegment;
     const isRight = fs.direction === "right";
     const isLeft = fs.direction === "left";
     const isUp = fs.direction === "up";
 
-    // Draw flight outline
     if (isRight) {
       const fw = fs.steps * fs.stepDepth;
       elements.push(
@@ -97,7 +159,6 @@ export function PlanView({ result }: Props) {
           />
         );
         if (i < fs.steps) {
-          const label = stepNum;
           elements.push(
             <text
               key={`num-${stepNum}`}
@@ -109,13 +170,12 @@ export function PlanView({ result }: Props) {
               fill="#6b7280"
               fontFamily="monospace"
             >
-              {label}
+              {stepNum}
             </text>
           );
         }
       }
       stepNum--;
-      // Direction arrow
       const arrowX = fs.startX + fs.steps * fs.stepDepth * 0.75;
       elements.push(
         <polygon
