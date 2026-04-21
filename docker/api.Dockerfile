@@ -2,9 +2,10 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 RUN npm install -g pnpm@8
 
-COPY package.json pnpm-workspace.yaml ./
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY packages/calc/package.json ./packages/calc/
 COPY apps/api/package.json ./apps/api/
+COPY apps/web/package.json ./apps/web/
 RUN pnpm install --frozen-lockfile
 
 COPY packages/calc ./packages/calc
@@ -24,5 +25,5 @@ COPY --from=builder /app/apps/api/package.json ./apps/api/
 
 USER appuser
 ENV NODE_ENV=production
-EXPOSE 3000
+EXPOSE 3001
 CMD ["node", "apps/api/dist/index.js"]
