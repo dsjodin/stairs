@@ -25,11 +25,22 @@ export function SideView({ result, style }: Props) {
   } = result;
   const totalRise = result.numberOfSteps * actualStepHeight;
 
+  // Landing depth adds to visual horizontal span in the unrolled elevation
+  let landingVisualWidth = 0;
+  for (let si = 0; si < segments.length; si++) {
+    const seg = segments[si];
+    if (seg.kind === "landing") {
+      const ls = seg as LandingSegment;
+      const nextFlight = segments.slice(si + 1).find((s) => s.kind === "flight") as FlightSegment | undefined;
+      landingVisualWidth += nextFlight?.direction === "left" ? ls.width : ls.depth;
+    }
+  }
+
   const extraLeft = actualStepDepth * 1.5;
   const extraRight = actualStepDepth * 2;
   const extraY = stairwellStart !== undefined ? floorThickness + actualStepHeight * 2 : actualStepHeight * 2;
 
-  const scaleX = (W - MARGIN * 2) / (totalRun + extraLeft + extraRight);
+  const scaleX = (W - MARGIN * 2) / (totalRun + landingVisualWidth + extraLeft + extraRight);
   const scaleY = (H - MARGIN * 2) / (totalRise + extraY);
   const scale = Math.min(scaleX, scaleY);
 
@@ -51,20 +62,23 @@ export function SideView({ result, style }: Props) {
 
     if (seg.kind === "landing") {
       const ls = seg as LandingSegment;
+      const nextFlight = segments.slice(segIndex + 1).find((s) => s.kind === "flight") as FlightSegment | undefined;
+      const advance = nextFlight?.direction === "left" ? ls.width : ls.depth;
+      // Draw a flat platform at the current accumulated height (cy unchanged)
       paths.push(
         <rect
           key={`landing-${stepIndex}`}
-          x={sx(ls.x)}
-          y={sy(ls.y + ls.depth)}
-          width={ls.width * scale}
-          height={ls.depth * scale}
-          fill="#e5e7eb"
+          x={sx(cx)}
+          y={sy(cy)}
+          width={advance * scale}
+          height={Math.max(3, actualStepHeight * scale * 0.15)}
+          fill="#d1fae5"
           stroke="#374151"
-          strokeWidth={1.5}
+          strokeWidth={1}
         />
       );
-      cx = ls.x + ls.width;
-      cy = ls.y + ls.depth;
+      cx += advance;
+      // cy stays unchanged — landing is flat
       continue;
     }
 
