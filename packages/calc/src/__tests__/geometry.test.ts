@@ -3,6 +3,7 @@ import { straightSegments, lShapeSegments, uShapeSegments } from "../geometry.js
 
 const base = {
   numberOfSteps: 16,
+  flight1Steps: 8,
   stepHeight: 168.75,
   stepDepth: 260,
   stairWidth: 1000,

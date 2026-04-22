@@ -33,7 +33,20 @@ export function usePresets(): Preset[] {
       },
     },
     {
-      label: "Flerbostadshus U-trappa",
+      label: "L balanserad",
+      input: {
+        type: "L",
+        style: "closed",
+        totalRise: 2700,
+        desiredStepHeight: 175,
+        desiredStepDepth: 260,
+        stairWidth: 1000,
+        nosing: 20,
+        winderSteps: 4,
+      },
+    },
+    {
+      label: "Flerbostadshus U",
       input: {
         type: "U",
         style: "closed",
@@ -44,6 +57,19 @@ export function usePresets(): Preset[] {
         nosing: 20,
         landingDepth: 1200,
         wellWidth: 200,
+      },
+    },
+    {
+      label: "Tralldäck",
+      input: {
+        type: "straight",
+        style: "open",
+        totalRise: 600,
+        desiredStepHeight: 150,
+        desiredStepDepth: 300,
+        stairWidth: 900,
+        nosing: 0,
+        maxHorizontalRun: 1200,
       },
     },
   ];

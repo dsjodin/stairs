@@ -14,6 +14,15 @@ export const StairInputSchema = z.object({
   nosing: z.number().nonnegative().default(20),
   landingDepth: z.number().positive().optional(),
   wellWidth: z.number().positive().optional(),
+  // Winder (L-stair without landing)
+  winderSteps: z.number().int().min(2).max(20).optional(),
+  // Flight section lengths
+  flight1Run: z.number().positive().optional(),
+  maxHorizontalRun: z.number().positive().optional(),
+  // Stairwell (trapphål)
+  showStairwell: z.boolean().default(false),
+  floorThickness: z.number().positive().default(200),
+  minimumHeadroom: z.number().positive().default(2100),
 });
 
 export const WarningSchema = z.object({
@@ -42,9 +51,26 @@ export const LandingSegmentSchema = z.object({
   depth: z.number(),
 });
 
+export const WinderSegmentSchema = z.object({
+  kind: z.literal("winder"),
+  steps: z.number().int(),
+  stepHeight: z.number(),
+  innerRadius: z.number(),
+  outerRadius: z.number(),
+  pivotX: z.number(),
+  pivotY: z.number(),
+  startAngleDeg: z.number(),
+  totalAngleDeg: z.number(),
+  walkingLineDepth: z.number(),
+  nextFlightX: z.number(),
+  nextFlightY: z.number(),
+  nextDirection: z.enum(["right", "up", "left", "down"]),
+});
+
 export const SegmentSchema = z.discriminatedUnion("kind", [
   FlightSegmentSchema,
   LandingSegmentSchema,
+  WinderSegmentSchema,
 ]);
 
 export const StairResultSchema = z.object({
@@ -64,14 +90,19 @@ export const StairResultSchema = z.object({
   slopeDegrees: z.number(),
   warnings: z.array(WarningSchema),
   segments: z.array(SegmentSchema),
+  stairwellStart: z.number().optional(),
+  stairwellLength: z.number().optional(),
+  floorThickness: z.number(),
+  minimumHeadroom: z.number(),
 });
 
 export type StairType = z.infer<typeof StairTypeSchema>;
 export type StairStyle = z.infer<typeof StairStyleSchema>;
-export type StairInput = z.infer<typeof StairInputSchema>;
+export type StairInput = z.input<typeof StairInputSchema>;
 export type Warning = z.infer<typeof WarningSchema>;
 export type BlondelZone = z.infer<typeof BlondelZoneSchema>;
 export type FlightSegment = z.infer<typeof FlightSegmentSchema>;
 export type LandingSegment = z.infer<typeof LandingSegmentSchema>;
+export type WinderSegment = z.infer<typeof WinderSegmentSchema>;
 export type Segment = z.infer<typeof SegmentSchema>;
 export type StairResult = z.infer<typeof StairResultSchema>;

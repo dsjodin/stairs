@@ -5,8 +5,12 @@ interface ValidationParams {
   actualStepDepth: number;
   stairWidth: number;
   slopeDegrees: number;
+  sumRule: number;
   type: StairType;
   landingDepth?: number;
+  winderSteps?: number;
+  showStairwell?: boolean;
+  stairwellStart?: number;
 }
 
 export function buildWarnings(params: ValidationParams): Warning[] {
@@ -44,7 +48,19 @@ export function buildWarnings(params: ValidationParams): Warning[] {
     });
   }
 
-  if (params.type === "L" || params.type === "U") {
+  if (params.type === "L" && params.winderSteps) {
+    // Winder mode: check walking-line tread depth
+    const walkingLineRadius = (2 / 3) * params.stairWidth;
+    const walkingLineDepth = walkingLineRadius * (Math.PI / 2 / params.winderSteps);
+    if (walkingLineDepth < 250) {
+      warnings.push({
+        code: "BBR_WINDER_TREAD",
+        message: `Ganglinjens stegdjup ${walkingLineDepth.toFixed(0)} mm understiger 250 mm - oka antal vindelsteg`,
+        severity: "warn",
+      });
+    }
+  } else if (params.type === "L" || params.type === "U") {
+    // Landing mode: check landing depth
     const minLanding = Math.max(900, params.stairWidth);
     if (!params.landingDepth || params.landingDepth < minLanding) {
       const actual = params.landingDepth ?? 0;
@@ -54,6 +70,22 @@ export function buildWarnings(params: ValidationParams): Warning[] {
         severity: "warn",
       });
     }
+  }
+
+  if (params.sumRule < 430 || params.sumRule > 470) {
+    warnings.push({
+      code: "CONV_SUM_RULE",
+      message: `Summaregeln h+d = ${Math.round(params.sumRule)} mm (bor vara 430-470 mm)`,
+      severity: "warn",
+    });
+  }
+
+  if (params.showStairwell && params.stairwellStart !== undefined && params.stairwellStart <= 0) {
+    warnings.push({
+      code: "BBR_HEADROOM",
+      message: `Fri hojd uppnas ej - trapphalet maste tacka hela trappan`,
+      severity: "error",
+    });
   }
 
   return warnings;
