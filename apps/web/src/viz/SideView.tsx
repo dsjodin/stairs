@@ -96,8 +96,10 @@ export function SideView({ result, style }: Props) {
     }
 
     const fs = seg as FlightSegment;
-    if (fs.direction === "right") cx = fs.startX;
-    cy = fs.startY;
+    if (fs.direction === "right") {
+      cx = fs.startX;
+      cy = fs.startY;
+    }
 
     for (let i = 0; i < fs.steps; i++) {
       stepIndex++;
@@ -105,55 +107,29 @@ export function SideView({ result, style }: Props) {
       const tread = fs.stepDepth;
       const isLast = i === fs.steps - 1;
 
-      if (fs.direction === "right") {
-        if (style === "closed") {
-          const p = isLast
-            ? `M${sx(cx)},${sy(cy)} L${sx(cx)},${sy(cy + riser)}`
-            : `M${sx(cx)},${sy(cy)} L${sx(cx)},${sy(cy + riser)} L${sx(cx + tread)},${sy(cy + riser)}`;
-          paths.push(<path key={`step-${stepIndex}`} d={p} fill="none" stroke="#374151" strokeWidth={1.5} />);
-        } else if (!isLast) {
-          paths.push(
-            <path
-              key={`step-${stepIndex}`}
-              d={`M${sx(cx)},${sy(cy + riser)} L${sx(cx + tread)},${sy(cy + riser)}`}
-              fill="none"
-              stroke="#374151"
-              strokeWidth={2}
-            />
-          );
-        }
-        if (!isLast) cx += tread;
-        cy += riser;
-      } else if (fs.direction === "up") {
-        if (style === "closed") {
-          const p = isLast
-            ? `M${sx(cx)},${sy(cy)} L${sx(cx + riser)},${sy(cy)}`
-            : `M${sx(cx)},${sy(cy)} L${sx(cx + riser)},${sy(cy)} L${sx(cx + riser)},${sy(cy + tread)}`;
-          paths.push(<path key={`step-${stepIndex}`} d={p} fill="none" stroke="#374151" strokeWidth={1.5} />);
-        } else if (!isLast) {
-          paths.push(
-            <path
-              key={`step-${stepIndex}`}
-              d={`M${sx(cx + riser)},${sy(cy)} L${sx(cx + riser)},${sy(cy + tread)}`}
-              fill="none"
-              stroke="#374151"
-              strokeWidth={2}
-            />
-          );
-        }
-        cx += riser;
-        if (!isLast) cy += tread;
+      if (style === "closed") {
+        const p = isLast
+          ? `M${sx(cx)},${sy(cy)} L${sx(cx)},${sy(cy + riser)}`
+          : `M${sx(cx)},${sy(cy)} L${sx(cx)},${sy(cy + riser)} L${sx(cx + tread)},${sy(cy + riser)}`;
+        paths.push(<path key={`step-${stepIndex}`} d={p} fill="none" stroke="#374151" strokeWidth={1.5} />);
+      } else if (!isLast) {
+        paths.push(
+          <path
+            key={`step-${stepIndex}`}
+            d={`M${sx(cx)},${sy(cy + riser)} L${sx(cx + tread)},${sy(cy + riser)}`}
+            fill="none"
+            stroke="#374151"
+            strokeWidth={2}
+          />
+        );
       }
+      if (!isLast) cx += tread;
+      cy += riser;
     }
   }
 
-  const straightFlights = segments.filter((s) => s.kind === "flight") as FlightSegment[];
-  const firstFlight = straightFlights[0];
-  const lastFlight = straightFlights[straightFlights.length - 1];
-  const stringerEndX =
-    lastFlight.direction === "right"
-      ? lastFlight.startX + (lastFlight.steps - 1) * lastFlight.stepDepth
-      : lastFlight.startX;
+  const firstFlight = segments.find((s) => s.kind === "flight") as FlightSegment;
+  const stringerEndX = cx;
 
   // Stairwell elements
   const stairwellElements: React.ReactNode[] = [];

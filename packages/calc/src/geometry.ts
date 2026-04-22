@@ -178,17 +178,15 @@ export function calculateFootprint(
       maxX = Math.max(maxX, seg.pivotX + seg.outerRadius);
       maxY = Math.max(maxY, seg.pivotY + seg.outerRadius);
     } else {
-      // treads = steps - 1 (last step connects to floor, no tread)
-      const treads = seg.steps - 1;
       if (seg.direction === "right") {
-        maxX = Math.max(maxX, seg.startX + treads * seg.stepDepth);
+        maxX = Math.max(maxX, seg.startX + seg.steps * seg.stepDepth);
         maxY = Math.max(maxY, seg.startY + stairWidth);
       } else if (seg.direction === "left") {
         maxX = Math.max(maxX, seg.startX);
         maxY = Math.max(maxY, seg.startY + stairWidth);
       } else if (seg.direction === "up") {
         maxX = Math.max(maxX, seg.startX + stairWidth);
-        maxY = Math.max(maxY, seg.startY + treads * seg.stepDepth);
+        maxY = Math.max(maxY, seg.startY + seg.steps * seg.stepDepth);
       } else if (seg.direction === "down") {
         maxX = Math.max(maxX, seg.startX + stairWidth);
         maxY = Math.max(maxY, seg.startY);
