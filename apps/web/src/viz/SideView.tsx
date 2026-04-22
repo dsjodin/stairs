@@ -44,7 +44,10 @@ export function SideView({ result, style }: Props) {
   let cx = 0;
   let cy = 0;
 
-  for (const seg of segments) {
+  for (let segIndex = 0; segIndex < segments.length; segIndex++) {
+    const seg = segments[segIndex];
+    const isLastSeg = segIndex === segments.length - 1;
+
     if (seg.kind === "landing") {
       const ls = seg as LandingSegment;
       paths.push(
@@ -66,11 +69,11 @@ export function SideView({ result, style }: Props) {
 
     if (seg.kind === "winder") {
       const ws = seg as WinderSegment;
-      const tread = ws.walkingLineDepth;
+      const tread = actualStepDepth;
       for (let i = 0; i < ws.steps; i++) {
         stepIndex++;
         const riser = ws.stepHeight;
-        const isLast = i === ws.steps - 1;
+        const isLast = isLastSeg && i === ws.steps - 1;
         if (style === "closed") {
           const p = isLast
             ? `M${sx(cx)},${sy(cy)} L${sx(cx)},${sy(cy + riser)}`
@@ -105,7 +108,7 @@ export function SideView({ result, style }: Props) {
       stepIndex++;
       const riser = fs.stepHeight;
       const tread = fs.stepDepth;
-      const isLast = i === fs.steps - 1;
+      const isLast = isLastSeg && i === fs.steps - 1;
 
       if (style === "closed") {
         const p = isLast

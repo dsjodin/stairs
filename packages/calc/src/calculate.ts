@@ -47,11 +47,14 @@ export function calculate(rawInput: unknown): StairResult {
   const blondel = blondelFormula(actualStepHeight, actualStepDepth);
   const zone = blondelZone(blondel);
 
+  const sumRule = actualStepHeight + actualStepDepth;
+
   const warnings = buildWarnings({
     actualStepHeight,
     actualStepDepth,
     stairWidth: input.stairWidth,
     slopeDegrees,
+    sumRule,
     type: input.type,
     landingDepth: input.landingDepth,
     winderSteps: input.winderSteps,
@@ -74,7 +77,7 @@ export function calculate(rawInput: unknown): StairResult {
     totalFootprint: footprint,
     blondelFormula: blondel,
     blondelZone: zone,
-    sumRule: actualStepHeight + actualStepDepth,
+    sumRule,
     productRule: actualStepHeight * actualStepDepth,
     slopeDegrees,
     warnings,

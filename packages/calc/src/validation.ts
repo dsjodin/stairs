@@ -5,6 +5,7 @@ interface ValidationParams {
   actualStepDepth: number;
   stairWidth: number;
   slopeDegrees: number;
+  sumRule: number;
   type: StairType;
   landingDepth?: number;
   winderSteps?: number;
@@ -69,6 +70,14 @@ export function buildWarnings(params: ValidationParams): Warning[] {
         severity: "warn",
       });
     }
+  }
+
+  if (params.sumRule < 430 || params.sumRule > 470) {
+    warnings.push({
+      code: "CONV_SUM_RULE",
+      message: `Summaregeln h+d = ${Math.round(params.sumRule)} mm (bor vara 430-470 mm)`,
+      severity: "warn",
+    });
   }
 
   if (params.showStairwell && params.stairwellStart !== undefined && params.stairwellStart <= 0) {
