@@ -25,15 +25,16 @@ export function SideView({ result, style }: Props) {
   } = result;
   const totalRise = result.numberOfSteps * actualStepHeight;
 
-  const extraX = stairwellStart !== undefined ? actualStepDepth * 2 : actualStepDepth * 2;
+  const extraLeft = actualStepDepth * 1.5;
+  const extraRight = actualStepDepth * 2;
   const extraY = stairwellStart !== undefined ? floorThickness + actualStepHeight * 2 : actualStepHeight * 2;
 
-  const scaleX = (W - MARGIN * 2) / (totalRun + extraX);
+  const scaleX = (W - MARGIN * 2) / (totalRun + extraLeft + extraRight);
   const scaleY = (H - MARGIN * 2) / (totalRise + extraY);
   const scale = Math.min(scaleX, scaleY);
 
   function sx(mm: number) {
-    return MARGIN + mm * scale;
+    return MARGIN + (mm + extraLeft) * scale;
   }
   function sy(mm: number) {
     return H - MARGIN - mm * scale;
@@ -134,11 +135,61 @@ export function SideView({ result, style }: Props) {
   const firstFlight = segments.find((s) => s.kind === "flight") as FlightSegment;
   const stringerEndX = cx;
 
+  // Floor context (always shown)
+  const floorExtendMm = actualStepDepth * 1.5;
+  const slabWidthMm = actualStepDepth * 1.5;
+  const floorContextElements: React.ReactNode[] = [
+    // Lower floor line extending left
+    <line
+      key="lower-floor"
+      x1={sx(-floorExtendMm)}
+      y1={sy(0)}
+      x2={sx(0)}
+      y2={sy(0)}
+      stroke="#374151"
+      strokeWidth={2}
+    />,
+    // Upper floor line extending right
+    <line
+      key="upper-floor"
+      x1={sx(stringerEndX)}
+      y1={sy(totalRise)}
+      x2={sx(stringerEndX + floorExtendMm)}
+      y2={sy(totalRise)}
+      stroke="#374151"
+      strokeWidth={2}
+    />,
+    // Upper floor slab
+    <rect
+      key="upper-slab"
+      x={sx(stringerEndX)}
+      y={sy(totalRise)}
+      width={slabWidthMm * scale}
+      height={floorThickness * scale}
+      fill="#d1d5db"
+      stroke="#374151"
+      strokeWidth={1}
+    />,
+  ];
+
   // Stairwell elements
   const stairwellElements: React.ReactNode[] = [];
   if (stairwellStart !== undefined && stairwellLength !== undefined) {
     const ceilingH = totalRise - floorThickness;
     const nosingAtStart = stairwellStart * (totalRise / totalRun);
+
+    // Headroom zone shading
+    stairwellElements.push(
+      <rect
+        key="sw-zone"
+        x={sx(stairwellStart)}
+        y={sy(ceilingH)}
+        width={(totalRun - stairwellStart) * scale}
+        height={(ceilingH - nosingAtStart) * scale}
+        fill="#fef3c7"
+        opacity={0.45}
+      />
+    );
 
     // Dashed ceiling line (underside of upper floor)
     stairwellElements.push(
@@ -165,20 +216,6 @@ export function SideView({ result, style }: Props) {
         stroke="#9ca3af"
         strokeWidth={1}
         strokeDasharray="4,2"
-      />
-    );
-
-    // Upper floor slab (solid section to the right of stair top)
-    stairwellElements.push(
-      <rect
-        key="sw-slab"
-        x={sx(totalRun)}
-        y={sy(totalRise)}
-        width={40}
-        height={floorThickness * scale}
-        fill="#d1d5db"
-        stroke="#374151"
-        strokeWidth={1}
       />
     );
 
@@ -223,11 +260,13 @@ export function SideView({ result, style }: Props) {
         Sidovy
       </text>
 
-      {/* Ground line */}
+      {floorContextElements}
+
+      {/* Ground reference line */}
       <line
-        x1={sx(0) - 10}
+        x1={sx(-floorExtendMm) - 8}
         y1={sy(0)}
-        x2={sx(totalRun) + 50}
+        x2={sx(stringerEndX) + 8}
         y2={sy(0)}
         stroke="#9ca3af"
         strokeWidth={1}

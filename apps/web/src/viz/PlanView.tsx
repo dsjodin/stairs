@@ -287,6 +287,56 @@ export function PlanView({ result }: Props) {
     }
   }
 
+  // Per-flight dimension annotations (for multi-segment stairs)
+  const flightDims: React.ReactNode[] = [];
+  const flightSegs = segments.filter((s) => s.kind === "flight") as FlightSegment[];
+  if (flightSegs.length > 1) {
+    for (let fi = 0; fi < flightSegs.length; fi++) {
+      const fs = flightSegs[fi];
+      const flightRun = fs.steps * fs.stepDepth;
+      if (fs.direction === "right") {
+        flightDims.push(
+          <DimensionLine
+            key={`fdim-r-${fi}`}
+            x1={px(fs.startX)}
+            y1={py(fs.startY) - 22}
+            x2={px(fs.startX + flightRun)}
+            y2={py(fs.startY) - 22}
+            label={`${Math.round(flightRun)} mm`}
+            offset={-16}
+            color="#3b82f6"
+          />
+        );
+      } else if (fs.direction === "up") {
+        flightDims.push(
+          <DimensionLine
+            key={`fdim-u-${fi}`}
+            x1={px(fs.startX + stairWidth) + 22}
+            y1={py(fs.startY)}
+            x2={px(fs.startX + stairWidth) + 22}
+            y2={py(fs.startY + flightRun)}
+            label={`${Math.round(flightRun)} mm`}
+            offset={16}
+            color="#3b82f6"
+          />
+        );
+      } else if (fs.direction === "left") {
+        flightDims.push(
+          <DimensionLine
+            key={`fdim-l-${fi}`}
+            x1={px(fs.startX - flightRun)}
+            y1={py(fs.startY) - 22}
+            x2={px(fs.startX)}
+            y2={py(fs.startY) - 22}
+            label={`${Math.round(flightRun)} mm`}
+            offset={-16}
+            color="#3b82f6"
+          />
+        );
+      }
+    }
+  }
+
   return (
     <svg
       data-testid="plan-view-svg"
@@ -307,6 +357,7 @@ export function PlanView({ result }: Props) {
       </text>
 
       {elements}
+      {flightDims}
 
       <DimensionLine
         x1={px(0)}
