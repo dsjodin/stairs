@@ -1,195 +1,235 @@
 import React from "react";
-import type { StairResult, FlightSegment, WinderSegment } from "@stairs/calc";
+import type { StairResult, FlightSegment, LandingSegment, WinderSegment } from "@stairs/calc";
 
 interface Props {
   result: StairResult;
 }
 
 const W_SVG = 700;
-const H_SVG = 360;
+const H_SVG = 380;
 const MARGIN = 50;
 
 export function IsoView({ result }: Props) {
-  const { segments, actualStepHeight: h, actualStepDepth: d, stairWidth: W, numberOfSteps } = result;
-  const totalRise = numberOfSteps * h;
+  const { segments, actualStepHeight: rH, actualStepDepth: rD, stairWidth: W, numberOfSteps } = result;
+  const totalRise = numberOfSteps * rH;
+  const fp = result.totalFootprint;
 
-  const projW = result.totalRun + W * 0.5;
-  const projH = totalRise + W * 0.25;
+  const projW = fp.width + fp.depth * 0.5;
+  const projH = totalRise + fp.depth * 0.25;
 
   const scaleX = (W_SVG - MARGIN * 2) / Math.max(projW, 1);
   const scaleY = (H_SVG - MARGIN * 2) / Math.max(projH, 1);
   const scale = Math.min(scaleX, scaleY);
 
+  // baseY places z=0 at the correct screen y
   const baseX = MARGIN;
   const baseY = MARGIN + totalRise * scale;
 
   function proj(x: number, y: number, z: number) {
-    return {
-      sx: baseX + (x + y * 0.5) * scale,
-      sy: baseY + (-z + y * 0.25) * scale,
-    };
+    return { sx: baseX + (x + y * 0.5) * scale, sy: baseY + (-z + y * 0.25) * scale };
   }
 
-  function p(x: number, y: number, z: number) {
+  function pStr(x: number, y: number, z: number) {
     const pt = proj(x, y, z);
     return `${pt.sx.toFixed(1)},${pt.sy.toFixed(1)}`;
   }
 
-  function poly(corners: [number, number, number][]) {
-    return corners.map(([x, y, z]) => p(x, y, z)).join(" ");
+  function quad(c: [number, number, number][]) {
+    return c.map(([x, y, z]) => pStr(x, y, z)).join(" ");
   }
 
-  // Linearize all segments into steps with (cx, cz) elevation positions
-  const steps: Array<{ cx: number; cz: number; riser: number; tread: number }> = [];
-  let cx = 0;
-  let cz = 0;
+  let z3d = 0;
+  let k = 0;
+  const bg: React.ReactNode[] = []; // drawn first (back faces / stringers)
+  const fg: React.ReactNode[] = []; // drawn second (risers + treads)
 
   for (let si = 0; si < segments.length; si++) {
     const seg = segments[si];
     const isLastSeg = si === segments.length - 1;
 
-    if (seg.kind === "landing") continue;
+    if (seg.kind === "landing") {
+      const ls = seg as LandingSegment;
+      fg.push(
+        <polygon
+          key={`land-${k++}`}
+          points={quad([
+            [ls.x, ls.y, z3d],
+            [ls.x + ls.width, ls.y, z3d],
+            [ls.x + ls.width, ls.y + ls.depth, z3d],
+            [ls.x, ls.y + ls.depth, z3d],
+          ])}
+          fill="#d1fae5"
+          stroke="#374151"
+          strokeWidth={1}
+        />
+      );
+      continue;
+    }
 
     if (seg.kind === "winder") {
       const ws = seg as WinderSegment;
+      const { pivotX: px, pivotY: py, outerRadius: R, startAngleDeg, totalAngleDeg } = ws;
+
       for (let i = 0; i < ws.steps; i++) {
         const isLast = isLastSeg && i === ws.steps - 1;
-        steps.push({ cx, cz, riser: ws.stepHeight, tread: d });
-        cz += ws.stepHeight;
-        if (!isLast) cx += d;
+        const h = ws.stepHeight;
+        const a1 = ((startAngleDeg + (i * totalAngleDeg) / ws.steps) * Math.PI) / 180;
+        const a2 = ((startAngleDeg + ((i + 1) * totalAngleDeg) / ws.steps) * Math.PI) / 180;
+        const aMid = (a1 + a2) / 2;
+        const ox1 = px + R * Math.cos(a1), oy1 = py + R * Math.sin(a1);
+        const ox2 = px + R * Math.cos(a2), oy2 = py + R * Math.sin(a2);
+        const oxM = px + R * Math.cos(aMid), oyM = py + R * Math.sin(aMid);
+
+        // Riser face (radial boundary at angle a1)
+        fg.push(
+          <polygon key={`wr-${k++}`}
+            points={quad([[px, py, z3d], [ox1, oy1, z3d], [ox1, oy1, z3d + h], [px, py, z3d + h]])}
+            fill="#9ca3af" stroke="#374151" strokeWidth={0.8} />
+        );
+        if (!isLast) {
+          // Tread sector approximated with a 4-point polygon (pivot + 3 arc pts)
+          fg.push(
+            <polygon key={`wt-${k++}`}
+              points={quad([[px, py, z3d + h], [ox1, oy1, z3d + h], [oxM, oyM, z3d + h], [ox2, oy2, z3d + h]])}
+              fill="#fef3c7" stroke="#374151" strokeWidth={0.8} />
+          );
+        }
+        z3d += h;
       }
       continue;
     }
 
     const fs = seg as FlightSegment;
-    for (let i = 0; i < fs.steps; i++) {
-      const isLast = isLastSeg && i === fs.steps - 1;
-      steps.push({ cx, cz, riser: fs.stepHeight, tread: fs.stepDepth });
-      cz += fs.stepHeight;
-      if (!isLast) cx += fs.stepDepth;
+    const h = fs.stepHeight;
+    const d = fs.stepDepth;
+
+    if (fs.direction === "right") {
+      const y0 = fs.startY;
+      let x3d = fs.startX;
+      const z0 = z3d;
+
+      // Far stringer polygon (at y = y0 + W)
+      const farPts: string[] = [pStr(x3d, y0 + W, z0)];
+      let tx = x3d;
+      for (let i = 0; i < fs.steps; i++) {
+        const isLast = isLastSeg && i === fs.steps - 1;
+        farPts.push(pStr(tx, y0 + W, z0 + (i + 1) * h));
+        if (!isLast) farPts.push(pStr(tx + d, y0 + W, z0 + (i + 1) * h));
+        if (!isLast) tx += d;
+      }
+      farPts.push(pStr(tx, y0 + W, z0));
+      bg.push(<polygon key={`fs-${k++}`} points={farPts.join(" ")} fill="#d1d5db" stroke="#374151" strokeWidth={1} />);
+
+      for (let i = 0; i < fs.steps; i++) {
+        const isLast = isLastSeg && i === fs.steps - 1;
+        fg.push(
+          <polygon key={`r-${k++}`}
+            points={quad([[x3d, y0, z3d], [x3d, y0 + W, z3d], [x3d, y0 + W, z3d + h], [x3d, y0, z3d + h]])}
+            fill="#9ca3af" stroke="#374151" strokeWidth={0.8} />
+        );
+        if (!isLast) {
+          fg.push(
+            <polygon key={`t-${k++}`}
+              points={quad([[x3d, y0, z3d + h], [x3d + d, y0, z3d + h], [x3d + d, y0 + W, z3d + h], [x3d, y0 + W, z3d + h]])}
+              fill="#f3f4f6" stroke="#374151" strokeWidth={0.8} />
+          );
+          x3d += d;
+        }
+        z3d += h;
+      }
+    } else if (fs.direction === "up") {
+      const x0 = fs.startX;
+      let y3d = fs.startY;
+      const z0 = z3d;
+
+      // Far stringer at x = x0 + W
+      const farPts: string[] = [pStr(x0 + W, y3d, z0)];
+      let ty = y3d;
+      for (let i = 0; i < fs.steps; i++) {
+        const isLast = isLastSeg && i === fs.steps - 1;
+        farPts.push(pStr(x0 + W, ty, z0 + (i + 1) * h));
+        if (!isLast) farPts.push(pStr(x0 + W, ty + d, z0 + (i + 1) * h));
+        if (!isLast) ty += d;
+      }
+      farPts.push(pStr(x0 + W, ty, z0));
+      bg.push(<polygon key={`fs-${k++}`} points={farPts.join(" ")} fill="#c8d5e0" stroke="#374151" strokeWidth={1} />);
+
+      for (let i = 0; i < fs.steps; i++) {
+        const isLast = isLastSeg && i === fs.steps - 1;
+        fg.push(
+          <polygon key={`r-${k++}`}
+            points={quad([[x0, y3d, z3d], [x0 + W, y3d, z3d], [x0 + W, y3d, z3d + h], [x0, y3d, z3d + h]])}
+            fill="#a3b4c4" stroke="#374151" strokeWidth={0.8} />
+        );
+        if (!isLast) {
+          fg.push(
+            <polygon key={`t-${k++}`}
+              points={quad([[x0, y3d, z3d + h], [x0 + W, y3d, z3d + h], [x0 + W, y3d + d, z3d + h], [x0, y3d + d, z3d + h]])}
+              fill="#e8edf2" stroke="#374151" strokeWidth={0.8} />
+          );
+          y3d += d;
+        }
+        z3d += h;
+      }
+    } else if (fs.direction === "left") {
+      const y0 = fs.startY;
+      let x3d = fs.startX;
+      const z0 = z3d;
+
+      // Far stringer at y = y0 + W
+      const farPts: string[] = [pStr(x3d, y0 + W, z0)];
+      let tx = x3d;
+      for (let i = 0; i < fs.steps; i++) {
+        const isLast = isLastSeg && i === fs.steps - 1;
+        farPts.push(pStr(tx, y0 + W, z0 + (i + 1) * h));
+        if (!isLast) farPts.push(pStr(tx - d, y0 + W, z0 + (i + 1) * h));
+        if (!isLast) tx -= d;
+      }
+      farPts.push(pStr(tx, y0 + W, z0));
+      bg.push(<polygon key={`fs-${k++}`} points={farPts.join(" ")} fill="#d1d5db" stroke="#374151" strokeWidth={1} />);
+
+      for (let i = 0; i < fs.steps; i++) {
+        const isLast = isLastSeg && i === fs.steps - 1;
+        // Riser faces +x direction; draw it anyway for visual clarity
+        fg.push(
+          <polygon key={`r-${k++}`}
+            points={quad([[x3d, y0, z3d], [x3d, y0 + W, z3d], [x3d, y0 + W, z3d + h], [x3d, y0, z3d + h]])}
+            fill="#b0bec5" stroke="#374151" strokeWidth={0.8} />
+        );
+        if (!isLast) {
+          fg.push(
+            <polygon key={`t-${k++}`}
+              points={quad([[x3d - d, y0, z3d + h], [x3d, y0, z3d + h], [x3d, y0 + W, z3d + h], [x3d - d, y0 + W, z3d + h]])}
+              fill="#f3f4f6" stroke="#374151" strokeWidth={0.8} />
+          );
+          x3d -= d;
+        }
+        z3d += h;
+      }
     }
   }
 
-  if (steps.length === 0) return null;
-
-  const lastStep = steps[steps.length - 1];
-
-  // Far stringer polygon (stair profile at y=W)
-  const farPts: string[] = [p(0, W, 0)];
-  for (let i = 0; i < steps.length; i++) {
-    const { cx: sx, cz: sz, riser, tread } = steps[i];
-    const isLast = i === steps.length - 1;
-    farPts.push(p(sx, W, sz + riser));
-    if (!isLast) farPts.push(p(sx + tread, W, sz + riser));
-  }
-  farPts.push(p(lastStep.cx, W, 0));
-
-  // Near stringer outline at y=0
-  const nearPts: string[] = [p(0, 0, 0)];
-  for (let i = 0; i < steps.length; i++) {
-    const { cx: sx, cz: sz, riser, tread } = steps[i];
-    const isLast = i === steps.length - 1;
-    nearPts.push(p(sx, 0, sz + riser));
-    if (!isLast) nearPts.push(p(sx + tread, 0, sz + riser));
-  }
-
-  const elements: React.ReactNode[] = [];
-
-  // Far stringer
-  elements.push(
-    <polygon
-      key="far-stringer"
-      points={farPts.join(" ")}
-      fill="#d1d5db"
-      stroke="#374151"
-      strokeWidth={1}
-    />
-  );
-
-  // Steps: risers and treads (drawn left to right so near steps are on top visually)
-  for (let i = 0; i < steps.length; i++) {
-    const { cx: sx, cz: sz, riser, tread } = steps[i];
-    const isLast = i === steps.length - 1;
-
-    elements.push(
-      <polygon
-        key={`riser-${i}`}
-        points={poly([
-          [sx, 0, sz],
-          [sx, W, sz],
-          [sx, W, sz + riser],
-          [sx, 0, sz + riser],
-        ])}
-        fill="#9ca3af"
-        stroke="#374151"
-        strokeWidth={0.8}
-      />
-    );
-
-    if (!isLast) {
-      elements.push(
-        <polygon
-          key={`tread-${i}`}
-          points={poly([
-            [sx, 0, sz + riser],
-            [sx + tread, 0, sz + riser],
-            [sx + tread, W, sz + riser],
-            [sx, W, sz + riser],
-          ])}
-          fill="#f3f4f6"
-          stroke="#374151"
-          strokeWidth={0.8}
-        />
-      );
+  // Width label at top of last segment
+  const lastSeg = segments[segments.length - 1];
+  let labelPt = proj(0, W / 2, totalRise);
+  let labelPt2 = proj(0, W, totalRise);
+  if (lastSeg.kind === "flight") {
+    const fs = lastSeg as FlightSegment;
+    if (fs.direction === "right") {
+      labelPt = proj(result.totalRun, fs.startY, totalRise);
+      labelPt2 = proj(result.totalRun, fs.startY + W, totalRise);
+    } else if (fs.direction === "up") {
+      const finalY = fs.startY + (fs.steps - 1) * fs.stepDepth;
+      labelPt = proj(fs.startX, finalY, totalRise);
+      labelPt2 = proj(fs.startX + W, finalY, totalRise);
+    } else if (fs.direction === "left") {
+      const finalX = fs.startX - (fs.steps - 1) * fs.stepDepth;
+      labelPt = proj(finalX, fs.startY, totalRise);
+      labelPt2 = proj(finalX, fs.startY + W, totalRise);
     }
   }
-
-  // Near stringer outline
-  elements.push(
-    <polyline
-      key="near-stringer"
-      points={nearPts.join(" ")}
-      fill="none"
-      stroke="#374151"
-      strokeWidth={1.5}
-    />
-  );
-
-  // Width line at top of stair
-  const topNear = proj(lastStep.cx, 0, totalRise);
-  const topFar = proj(lastStep.cx, W, totalRise);
-  elements.push(
-    <line key="top-w" x1={topNear.sx} y1={topNear.sy} x2={topFar.sx} y2={topFar.sy} stroke="#374151" strokeWidth={1.5} />
-  );
-
-  // Width label
-  const topMid = proj(lastStep.cx, W / 2, totalRise);
-  elements.push(
-    <text
-      key="width-label"
-      x={topMid.sx + 4}
-      y={topMid.sy - 4}
-      fontSize={9}
-      fill="#6b7280"
-      fontFamily="monospace"
-    >
-      {Math.round(W)} mm
-    </text>
-  );
-
-  // Bottom width line
-  const botNear = proj(0, 0, 0);
-  const botFar = proj(0, W, 0);
-  elements.push(
-    <line key="bot-w" x1={botNear.sx} y1={botNear.sy} x2={botFar.sx} y2={botFar.sy} stroke="#374151" strokeWidth={1.5} />
-  );
-
-  // Ground shadow line (context)
-  const gL = proj(-d * 0.3, 0, 0);
-  const gR = proj(lastStep.cx + d * 0.3, 0, 0);
-  elements.push(
-    <line key="ground" x1={gL.sx} y1={gL.sy} x2={gR.sx} y2={gR.sy} stroke="#9ca3af" strokeWidth={1} strokeDasharray="4,3" />
-  );
+  const widthMidX = (labelPt.sx + labelPt2.sx) / 2;
+  const widthMidY = (labelPt.sy + labelPt2.sy) / 2;
 
   return (
     <svg
@@ -202,7 +242,11 @@ export function IsoView({ result }: Props) {
       <text x={W_SVG / 2} y={14} textAnchor="middle" fontSize={11} fill="#6b7280" fontFamily="sans-serif">
         3D-vy
       </text>
-      {elements}
+      {bg}
+      {fg}
+      <text x={widthMidX + 4} y={widthMidY - 4} fontSize={9} fill="#6b7280" fontFamily="monospace">
+        {Math.round(W)} mm
+      </text>
     </svg>
   );
 }
